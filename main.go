@@ -29,6 +29,7 @@ func main() {
 	}
 	if subcommand == "exec" {
 		if len(os.Args) < 3 {
+			// TODO: emulate
 			fmt.Println("no enough args")
 			os.Exit(-1)
 		}
@@ -55,8 +56,7 @@ func main() {
 			var buf bytes.Buffer
 			c.Stdout = &buf
 			if err := c.Run(); err != nil {
-				fmt.Println(err)
-				os.Exit(-1)
+				os.Exit(c.ProcessState.ExitCode())
 			}
 			value := strings.TrimSuffix(buf.String(), "\r\n")
 			cmd.Env = append(cmd.Env, fmt.Sprintf("EMACSLOADPATH=%s", value))
@@ -66,8 +66,7 @@ func main() {
 			var buf bytes.Buffer
 			c.Stdout = &buf
 			if err := c.Run(); err != nil {
-				fmt.Println(err)
-				os.Exit(-1)
+				os.Exit(c.ProcessState.ExitCode())
 			}
 			value := strings.TrimSuffix(buf.String(), "\r\n")
 			cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s", value))
@@ -75,13 +74,11 @@ func main() {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
-			fmt.Println(err)
-			os.Exit(-1)
+			os.Exit(cmd.ProcessState.ExitCode())
 		}
 	default:
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			fmt.Println(err)
 			os.Exit(-1)
 		}
 		srcDir := filepath.Join(homeDir, ".cask")
@@ -93,8 +90,7 @@ func main() {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
-			fmt.Println(err)
-			os.Exit(-1)
+			os.Exit(cmd.ProcessState.ExitCode())
 		}
 	}
 }
