@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +19,7 @@ func main() {
 	if emacs == "" {
 		emacs = "emacs"
 	}
-	cask := os.Args[0]
+	// cask := os.Args[0]
 	var subcommand string
 	var extras []string
 	if len(os.Args) > 1 {
@@ -34,6 +35,10 @@ func main() {
 			os.Exit(-1)
 		}
 		extras = os.Args[3:]
+	}
+	script, err := scriptPath()
+	if err != nil {
+		os.Exit(-1)
 	}
 	// TODO: subcommand to bootstrap/clone cask to some where
 	switch subcommand {
@@ -52,20 +57,18 @@ func main() {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("TMPDIR=%s", os.TempDir()))
 		cmd.Env = append(cmd.Env, fmt.Sprintf("EMACS=%s", emacs))
 		{
-			c := exec.Command(cask, "load-path")
 			var buf bytes.Buffer
-			c.Stdout = &buf
-			if err := c.Run(); err != nil {
+			c, err := runCaskCli(emacs, script, "load-path", nil, &buf, nil)
+			if err != nil {
 				os.Exit(c.ProcessState.ExitCode())
 			}
 			value := strings.TrimSuffix(buf.String(), "\r\n")
 			cmd.Env = append(cmd.Env, fmt.Sprintf("EMACSLOADPATH=%s", value))
 		}
 		{
-			c := exec.Command(cask, "path")
 			var buf bytes.Buffer
-			c.Stdout = &buf
-			if err := c.Run(); err != nil {
+			c, err := runCaskCli(emacs, script, "path", nil, &buf, nil)
+			if err != nil {
 				os.Exit(c.ProcessState.ExitCode())
 			}
 			value := strings.TrimSuffix(buf.String(), "\r\n")
@@ -77,20 +80,29 @@ func main() {
 			os.Exit(cmd.ProcessState.ExitCode())
 		}
 	default:
-		homeDir, err := os.UserHomeDir()
+		cmd, err := runCaskCli(emacs, script, subcommand, extras, os.Stdout, os.Stderr)
 		if err != nil {
-			os.Exit(-1)
-		}
-		srcDir := filepath.Join(homeDir, ".cask")
-		script := filepath.Join(srcDir, "cask-cli.el")
-		var args []string
-		args = append(args, "-Q", "--script", script, "--", subcommand)
-		args = append(args, extras...)
-		cmd := exec.Command(emacs, args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
 			os.Exit(cmd.ProcessState.ExitCode())
 		}
 	}
+}
+
+func scriptPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	srcDir := filepath.Join(homeDir, ".cask")
+	script := filepath.Join(srcDir, "cask-cli.el")
+	return script, nil
+}
+
+func runCaskCli(emacs string, script string, subcommand string, args []string, stdout io.Writer, stderr io.Writer) (*exec.Cmd, error) {
+	var argv []string
+	argv = append(argv, "-Q", "--script", script, "--", subcommand)
+	argv = append(argv, args...)
+	cmd := exec.Command(emacs, argv...)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd, cmd.Run()
 }
