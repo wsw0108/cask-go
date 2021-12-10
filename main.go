@@ -40,6 +40,7 @@ func main() {
 	if err != nil {
 		os.Exit(-1)
 	}
+	envv := os.Environ()
 	// TODO: subcommand to bootstrap/clone cask to some where
 	switch subcommand {
 	case "emacs", "exec":
@@ -49,16 +50,23 @@ func main() {
 		} else if subcommand == "exec" {
 			cmd = exec.Command(os.Args[2], extras...)
 		}
-		// FIXME: copy all envs first
+		for _, env := range envv {
+			if len(env) >= 5 {
+				pp := env[:5]
+				if strings.EqualFold("PATH=", pp) {
+					continue
+				}
+			}
+			cmd.Env = append(cmd.Env, env)
+		}
 		envHome := os.Getenv("HOME")
 		if envHome != "" {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("HOME=%s", envHome))
 		}
-		cmd.Env = append(cmd.Env, fmt.Sprintf("TMPDIR=%s", os.TempDir()))
 		cmd.Env = append(cmd.Env, fmt.Sprintf("EMACS=%s", emacs))
 		{
 			var buf bytes.Buffer
-			c, err := runCaskCli(emacs, script, "load-path", nil, &buf, nil)
+			c, err := runCaskCli(emacs, script, "load-path", nil, envv, &buf, nil)
 			if err != nil {
 				os.Exit(c.ProcessState.ExitCode())
 			}
@@ -67,7 +75,7 @@ func main() {
 		}
 		{
 			var buf bytes.Buffer
-			c, err := runCaskCli(emacs, script, "path", nil, &buf, nil)
+			c, err := runCaskCli(emacs, script, "path", nil, envv, &buf, nil)
 			if err != nil {
 				os.Exit(c.ProcessState.ExitCode())
 			}
@@ -80,7 +88,7 @@ func main() {
 			os.Exit(cmd.ProcessState.ExitCode())
 		}
 	default:
-		cmd, err := runCaskCli(emacs, script, subcommand, extras, os.Stdout, os.Stderr)
+		cmd, err := runCaskCli(emacs, script, subcommand, extras, envv, os.Stdout, os.Stderr)
 		if err != nil {
 			os.Exit(cmd.ProcessState.ExitCode())
 		}
@@ -97,11 +105,12 @@ func scriptPath() (string, error) {
 	return script, nil
 }
 
-func runCaskCli(emacs string, script string, subcommand string, args []string, stdout io.Writer, stderr io.Writer) (*exec.Cmd, error) {
+func runCaskCli(emacs string, script string, subcommand string, args []string, env []string, stdout io.Writer, stderr io.Writer) (*exec.Cmd, error) {
 	var argv []string
 	argv = append(argv, "-Q", "--script", script, "--", subcommand)
 	argv = append(argv, args...)
 	cmd := exec.Command(emacs, argv...)
+	cmd.Env = env
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	return cmd, cmd.Run()
